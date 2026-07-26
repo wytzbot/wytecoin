@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>WyteCoin - Tap to Earn</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a0f; color: white; font-family: system-ui; overflow: hidden; }
+  .coin { 
+    width: 180px; height: 180px; border-radius: 50%; 
+    background: radial-gradient(circle at 30% 30%, #ffd700, #ffb700, #ff8c00);
+    box-shadow: 0 0 40px #ffb700, inset 0 0 20px rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; font-weight: 900; color: #1a1a1a;
+    transition: transform 0.1s; user-select: none; cursor: pointer;
+  }
+  .coin:active { transform: scale(0.92); }
+  .pop-coin {
+    position: absolute; width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle, #ffd700, #ff8c00);
+    animation: floatUp 1s forwards; pointer-events: none; z-index: 50;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-120px) scale(0.5); }
+  }
+  .page { display: none; }
+  .page.active { display: block; }
+  .confetti { position: fixed; width: 10px; height: 10px; background: #ffd700; animation: fall 3s linear; z-index: 100; }
+  @keyframes fall { to { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+<!-- VIGNETTE AD -->
+<script>(function(s){s.dataset.zone='11372128',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="flex justify-between p-4 bg-black/40 backdrop-blur sticky top-0">
+  <div class="text-xl font-bold">WYC: <span id="tapCount">0</span></div>
+  <div class="text-sm">Rate: $<span id="rate">0.0012</span></div>
+</div>
+
+<!-- PAGES -->
+<div id="home" class="page active h-[70vh] flex flex-col items-center justify-center relative">
+  <div id="mainCoin" class="coin">WC</div>
+  <p class="mt-6 text-gray-400">Tap the coin!</p>
+</div>
+
+<div id="withdraw" class="page p-4 pb-32">
+  <h2 class="text-2xl font-bold mb-4">Withdraw</h2>
+  
+  <p id="withdrawInfo" class="text-yellow-400 font-bold mb-3">Current: ₦0.00 / Min: ₦5,000</p>
+  <p class="text-xs text-gray-400 mb-4">You need ₦5,000 worth of taps. Watch 1 ad to unlock withdrawal</p>
+
+  <!-- BANNER AD -->
+  <div class="w-full flex justify-center mb-4">
+    <script src="https://5gvci.com/act/files/tag.min.js?z=11372131" data-cfasync="false" async></script>
+  </div>
+
+  <div id="withdrawForm" style="display:none;">
+    <input id="bankName" placeholder="Bank Name" class="w-full p-3 mb-3 rounded bg-gray-800 outline-none">
+    <input id="accNumber" placeholder="Account Number" type="number" class="w-full p-3 mb-3 rounded bg-gray-800 outline-none">
+    <button id="finalWithdrawBtn" onclick="requestWithdraw()" class="w-full bg-yellow-500 text-black font-bold p-3 rounded">
+      Submit Withdrawal
+    </button>
+  </div>
+
+  <button id="withdrawBtn" onclick="handleWithdrawClick()" disabled class="w-full bg-gray-500 text-black font-bold p-3 rounded">
+    Watch Ad to Withdraw
+  </button>
+</div>
+
+<div id="profile" class="page p-4 pb-32">
+  <h2 class="text-2xl font-bold mb-4">Profile</h2>
+  <button id="googleLogin" onclick="googleSignIn()" class="w-full bg-white text-black font-bold p-3 rounded">Login with Google</button>
+  <p id="userEmail" class="mt-3 text-gray-400"></p>
+</div>
+
+<div id="more" class="page p-4 pb-32">
+  <h2 class="text-2xl font-bold mb-4">More</h2>
+  <button onclick="showPage('privacy')" class="block w-full text-left p-2 border-b border-gray-800">Privacy Policy</button>
+  <button onclick="showPage('terms')" class="block w-full text-left p-2 border-b border-gray-800">Terms</button>
+  <button onclick="showPage('about')" class="block w-full text-left p-2">About</button>
+</div>
+
+<div id="privacy" class="page p-4 pb-32"><h2 class="text-2xl font-bold">Privacy</h2><p class="text-gray-400 mt-2">We don't sell your data. Taps are tracked to your account only.</p></div>
+<div id="terms" class="page p-4 pb-32"><h2 class="text-2xl font-bold">Terms</h2><p class="text-gray-400 mt-2">WYC has no cash value until withdrawn. 1 tap = ₦0.05. Min withdrawal ₦5000.</p></div>
+<div id="about" class="page p-4 pb-32"><h2 class="text-2xl font-bold">About WyteCoin</h2><p class="text-gray-400 mt-2">Tap to earn WYC. Withdraw to your bank when you reach ₦5000.</p></div>
+
+<!-- BOTTOM NAV -->
+<div class="fixed bottom-0 w-full bg-black/80 backdrop-blur flex justify-around p-3 border-t border-gray-800">
+  <button onclick="showPage('home')">🏠 Home</button>
+  <button onclick="showPage('withdraw')">💸 Withdraw</button>
+  <button onclick="showPage('profile')">👤 Profile</button>
+  <button onclick="showPage('more')">⚙️ More</button>
+</div>
+
+<script type="module">
+  // ===== FIREBASE SETUP =====
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDTAqb0waoaoSDrwOa2UXRjwl8wmSyXUs0",
+    authDomain: "my-wyticle-id.firebaseapp.com",
+    projectId: "my-wyticle-id",
+    storageBucket: "my-wyticle-id.firebasestorage.app",
+    messagingSenderId: "634169882815",
+    appId: "1:634169882815:web:486d39a13ce2f855c0ae0a",
+    measurementId: "G-7X84RSMH58"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // ===== APP LOGIC =====
+  const TAPS_PER_NAIRA = 20; // 20 taps = ₦1. So 100,000 taps = ₦5000
+  const MIN_NAIRA = 5000;
+  const MIN_TAPS = MIN_NAIRA * TAPS_PER_NAIRA; // 100000
+
+  let taps = 0;
+  let rate = 0.0012;
+  let currentUser = null;
+  let celebrated = false;
+
+  const tapCountEl = document.getElementById('tapCount');
+  const rateEl = document.getElementById('rate');
+  const mainCoin = document.getElementById('mainCoin');
+  const withdrawBtn = document.getElementById('withdrawBtn');
+  const withdrawInfo = document.getElementById('withdrawInfo');
+
+  // Load taps from Firebase
+  async function loadTaps() {
+    if(!currentUser) return;
+    const ref = doc(db, "users", currentUser.uid);
+    const snap = await getDoc(ref);
+    taps = snap.exists() ? snap.data().taps || 0 : 0;
+    updateUI();
+  }
+
+  // Save taps to Firebase
+  async function saveTaps() {
+    if(!currentUser) return;
+    await setDoc(doc(db, "users", currentUser.uid), { taps, email: currentUser.email }, { merge: true });
+  }
+
+  function updateUI() {
+    tapCountEl.innerText = taps.toLocaleString();
+    const nairaValue = (taps / TAPS_PER_NAIRA).toFixed(2);
+    withdrawInfo.innerText = `Current: ₦${nairaValue} / Min: ₦${MIN_NAIRA.toLocaleString()}`;
+    
+    // Disable button if not enough
+    if(taps >= MIN_TAPS) {
+      withdrawBtn.disabled = false;
+      withdrawBtn.classList.remove('bg-gray-500');
+      withdrawBtn.classList.add('bg-yellow-500');
+      withdrawBtn.innerText = 'Watch Ad to Withdraw';
+    } else {
+      withdrawBtn.disabled = true;
+      withdrawBtn.classList.add('bg-gray-500');
+      withdrawBtn.classList.remove('bg-yellow-500');
+      withdrawBtn.innerText = `Need ₦${MIN_NAIRA} to Withdraw`;
+    }
+  }
+
+  // Tap coin
+  mainCoin.addEventListener('click', (e) => {
+    taps++;
+    saveTaps();
+    updateUI();
+    
+    // spawn pop coin
+    const pop = document.createElement('div');
+    pop.className = 'pop-coin';
+    pop.style.left = e.clientX - 15 + 'px';
+    pop.style.top = e.clientY - 15 + 'px';
+    document.body.appendChild(pop);
+    setTimeout(() => pop.remove(), 1000);
+    
+    // 10k celebration
+    if(taps >= 10000 && !celebrated) {
+      celebrated = true;
+      alert('🎉 10,000 TAPS! Keep going to ₦5000! 🎉');
+      for(let i=0; i<50; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = Math.random()*100 + 'vw';
+        c.style.top = '0px';
+        c.style.background = ['#ffd700','#ff0000','#00ff00','#0000ff'][Math.floor(Math.random()*4)];
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 3000);
+      }
+    }
+  });
+
+  // Fake rate change every minute
+  setInterval(() => {
+    rate = (0.0010 + Math.random()*0.0005).toFixed(4);
+    rateEl.innerText = rate;
+  }, 60000);
+
+  // Page navigation
+  window.showPage = (id) => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // Google Login
+  window.googleSignIn = () => {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider).then(res => {
+      currentUser = res.user;
+      document.getElementById('userEmail').innerText = 'Logged in: ' + res.user.email;
+      loadTaps();
+    }).catch(err => alert(err.message));
+  }
+
+  // This runs when they click "Withdraw" button - SHOWS AD FIRST
+  window.handleWithdrawClick = () => {
+    if(taps < MIN_TAPS) return alert(`You need ₦${MIN_NAIRA} minimum to withdraw`);
+    
+    // Trigger Vignette Ad
+    const s = document.createElement('script');
+    s.dataset.zone='11372128';
+    s.src='https://n6wxm.com/vignette.min.js';
+    document.body.appendChild(s);
+
+    // After 3 seconds show the form
+    setTimeout(() => {
+      document.getElementById('withdrawForm').style.display = 'block';
+      document.getElementById('withdrawBtn').style.display = 'none';
+    }, 3000);
+  }
+
+  // This runs when they submit bank details
+  window.requestWithdraw = async () => {
+    const bank = document.getElementById('bankName').value;
+    const acc = document.getElementById('accNumber').value;
+    if(!bank || !acc) return alert('Fill all fields');
+    
+    alert(`Withdrawal request sent for ₦${MIN_NAIRA}!\nBank: ${bank}\nAcc: ${acc}\n\nWe will review in 24hrs.`);
+    
+    taps = 0; // reset after request
+    saveTaps();
+    updateUI();
+    
+    // Reset form
+    document.getElementById('withdrawForm').style.display = 'none';
+    document.getElementById('withdrawBtn').style.display = 'block';
+    document.getElementById('bankName').value = '';
+    document.getElementById('accNumber').value = '';
+  }
+
+  // Auth state
+  onAuthStateChanged(auth, user => {
+    if(user) {
+      currentUser = user;
+      document.getElementById('userEmail').innerText = 'Logged in: ' + user.email;
+      loadTaps();
+    }
+  });
+</script>
+</body>
+  </html>
